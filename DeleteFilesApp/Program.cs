@@ -9,7 +9,7 @@ class Program
     {
         string rootFolderPath = string.Empty;
         int keepFileCount = 0;
-        string logFilePath = $"{DateTime.Now:yyyy-MM-dd}_log.txt"; 
+        string logFilePath = $"{DateTime.Now:yyyy-MM-dd}_log.txt";
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -54,36 +54,33 @@ class Program
             return;
         }
 
-        List<string> folders = new List<string> { rootFolderPath };
+        ProcessDirectory(rootFolderPath, keepFileCount, logFilePath);
+    }
 
-        while (folders.Count > 0)
+    static void ProcessDirectory(string currentFolder, int keepFileCount, string logFilePath)
+    {
+        try
         {
-            string currentFolder = folders[0];
-            folders.RemoveAt(0);
+            var bakFiles = new DirectoryInfo(currentFolder).GetFiles("*.bak").OrderBy(f => f.LastWriteTime).ToList();
 
-            try
+            foreach (var file in bakFiles.Skip(keepFileCount))
             {
-                var bakFiles = new DirectoryInfo(currentFolder).GetFiles("*.bak").OrderBy(f => f.LastWriteTime).ToList();
+                file.Delete();
+                LogDeletedFile(file.FullName, logFilePath);
+            }
 
-                foreach (var file in bakFiles.Skip(keepFileCount))
-                {
-                    file.Delete();
-                    LogDeletedFile(file.FullName, logFilePath);
-                }
-
-                foreach (var dir in Directory.GetDirectories(currentFolder))
-                {
-                    folders.Add(dir);
-                }
-            }
-            catch (UnauthorizedAccessException ex)
+            foreach (var dir in Directory.GetDirectories(currentFolder))
             {
-                LogError(ex.Message, logFilePath);
+                ProcessDirectory(dir, keepFileCount, logFilePath); 
             }
-            catch (Exception ex)
-            {
-                LogError(ex.Message, logFilePath);
-            }
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            LogError(ex.Message, logFilePath);
+        }
+        catch (Exception ex)
+        {
+            LogError(ex.Message, logFilePath);
         }
     }
 
@@ -123,3 +120,4 @@ class Program
         }
     }
 }
+
