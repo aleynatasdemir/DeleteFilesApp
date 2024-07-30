@@ -2,14 +2,17 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Xml;
+using Newtonsoft.Json;
 
 class Program
 {
     static void Main(string[] args)
     {
         string rootFolderPath = string.Empty;
-        int keepFileCount = 0;
+        string configFilePath = "config.json";
         string logFilePath = $"{DateTime.Now:yyyy-MM-dd}_log.txt";
+        bool createConfig = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -21,14 +24,8 @@ class Program
                         rootFolderPath = args[i + 1];
                     }
                     break;
-                case "-c":
-                    if (i + 1 < args.Length)
-                    {
-                        if (int.TryParse(args[i + 1], out int count))
-                        {
-                            keepFileCount = count;
-                        }
-                    }
+                case "-createConfig":
+                    createConfig = true;
                     break;
             }
         }
@@ -36,51 +33,72 @@ class Program
         if (string.IsNullOrEmpty(rootFolderPath))
         {
             LogMessage(logFilePath, "Root folder path is not specified.");
-            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount");
-            return;
-        }
-
-        if (keepFileCount <= 0)
-        {
-            LogMessage(logFilePath, "Keep file count must be a positive integer.");
-            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount");
+            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" [-createConfig]");
             return;
         }
 
         if (!Directory.Exists(rootFolderPath))
         {
             LogMessage(logFilePath, "The specified directory does not exist.");
-            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount");
+            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" [-createConfig]");
             return;
         }
 
-        ProcessDirectory(rootFolderPath, keepFileCount, logFilePath);
+        if (createConfig)
+        {
+            CreateConfigFile(rootFolderPath, configFilePath);
+            Console.WriteLine($"Config file created: {configFilePath}. Please update the keep file count and rerun the application.");
+        }
+        else
+        {
+            ProcessAndDeleteFiles(configFilePath, logFilePath);
+        }
     }
 
-    static void ProcessDirectory(string currentFolder, int keepFileCount, string logFilePath)
+    static void CreateConfigFile(string rootFolderPath, string configFilePath)
     {
-        try
-        {
-            var bakFiles = new DirectoryInfo(currentFolder).GetFiles("*.bak").OrderBy(f => f.LastWriteTime).ToList();
+        var folderInfos = new List<FolderInfo>();
+        ProcessDirectory(rootFolderPath, folderInfos);
 
-            foreach (var file in bakFiles.Skip(keepFileCount))
+        var json = JsonConvert.SerializeObject(folderInfos, Formatting.Indented);
+        File.WriteAllText(configFilePath, json);
+    }
+
+    static void ProcessDirectory(string currentFolder, List<FolderInfo> folderInfos)
+    {
+        var bakFiles = new DirectoryInfo(currentFolder).GetFiles("*.bak").OrderBy(f => f.LastWriteTime).ToList();
+        folderInfos.Add(new FolderInfo
+        {
+            FolderPath = currentFolder,
+            BakFileCount = bakFiles.Count,
+            KeepFileCount = 0 
+        });
+
+        foreach (var dir in Directory.GetDirectories(currentFolder))
+        {
+            ProcessDirectory(dir, folderInfos);
+        }
+    }
+
+    static void ProcessAndDeleteFiles(string configFilePath, string logFilePath)
+    {
+        var folderInfos = JsonConvert.DeserializeObject<List<FolderInfo>>(File.ReadAllText(configFilePath));
+
+        foreach (var folderInfo in folderInfos)
+        {
+            if (folderInfo.KeepFileCount <= 0) continue;
+
+            var bakFiles = new DirectoryInfo(folderInfo.FolderPath).GetFiles("*.bak").OrderBy(f => f.LastWriteTime).ToList();
+
+            foreach (var file in bakFiles.Skip(folderInfo.KeepFileCount))
             {
+                var backupFolderPath = Path.Combine(folderInfo.FolderPath, "Backup");
+                Directory.CreateDirectory(backupFolderPath);
+                var backupFilePath = Path.Combine(backupFolderPath, file.Name);
+                file.CopyTo(backupFilePath);
                 file.Delete();
                 LogDeletedFile(file.FullName, logFilePath);
             }
-
-            foreach (var dir in Directory.GetDirectories(currentFolder))
-            {
-                ProcessDirectory(dir, keepFileCount, logFilePath); 
-            }
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            LogError(ex.Message, logFilePath);
-        }
-        catch (Exception ex)
-        {
-            LogError(ex.Message, logFilePath);
         }
     }
 
@@ -96,18 +114,6 @@ class Program
         }
     }
 
-    static void LogError(string message, string logFilePath)
-    {
-        try
-        {
-            File.AppendAllText(logFilePath, $"{DateTime.Now}: Error {message}\n");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to log error: {ex.Message}");
-        }
-    }
-
     static void LogMessage(string logFilePath, string message)
     {
         try
@@ -120,4 +126,12 @@ class Program
         }
     }
 }
+
+public class FolderInfo
+{
+    public string FolderPath { get; set; }
+    public int BakFileCount { get; set; }
+    public int KeepFileCount { get; set; }
+}
+
 
