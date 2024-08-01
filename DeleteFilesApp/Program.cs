@@ -4,14 +4,26 @@ using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
 
+public class MainConfig
+{
+    public string RootPath { get; set; }
+    public List<FolderInfo> FolderList { get; set; }
+}
+
+public class FolderInfo
+{
+    public string FolderName { get; set; }
+    public int KeepFileCount { get; set; }
+}
+
 class Program
 {
     static void Main(string[] args)
     {
-        string rootFolderPath = string.Empty;
-        string configFilePath = "config.json";
-        string logFilePath = $"{DateTime.Now:yyyy-MM-dd}_log.txt";
-        bool createConfig = false;
+        string rootFolderPath = null;
+        int keepFileCount = 0;
+        bool isConfigFileSpecified = false;
+        string configFilePath = null;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -20,117 +32,133 @@ class Program
                 case "-p":
                     if (i + 1 < args.Length)
                     {
-                        rootFolderPath = args[i + 1];
+                        rootFolderPath = args[++i];
                     }
                     break;
-                case "-createConfig":
-                    createConfig = true;
+                case "-c":
+                    if (i + 1 < args.Length && int.TryParse(args[++i], out keepFileCount))
+                    {
+                        isConfigFileSpecified = false;
+                    }
+                    break;
+                case "-cf":
+                    if (i + 1 < args.Length)
+                    {
+                        configFilePath = args[++i];
+                        isConfigFileSpecified = true;
+                    }
+                    break;
+                default:
                     break;
             }
         }
 
+        
         if (string.IsNullOrEmpty(rootFolderPath))
         {
-            LogMessage(logFilePath, "Root folder path is not specified.");
-            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" [-createConfig]");
+            LogMessage("log.txt", "Root folder path is not specified.");
+            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount [-cf configFilePath]");
+            return;
+        }
+
+        if (keepFileCount <= 0)
+        {
+            LogMessage("log.txt", "Keep file count must be greater than 0.");
+            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount [-cf configFilePath]");
             return;
         }
 
         if (!Directory.Exists(rootFolderPath))
         {
-            LogMessage(logFilePath, "The specified directory does not exist.");
-            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" [-createConfig]");
+            LogMessage("log.txt", "Directory does not exist.");
+            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount [-cf configFilePath]");
             return;
         }
 
-        if (createConfig)
+        if ((isConfigFileSpecified && keepFileCount <= 0) || (rootFolderPath == null && isConfigFileSpecified) || (rootFolderPath != null && keepFileCount <= 0))
         {
-            CreateConfigFile(rootFolderPath, configFilePath);
-            Console.WriteLine($"Config file created: {configFilePath}. Please update the keep file count and rerun the application.");
+            LogMessage("log.txt", "Invalid argument combinations.");
+            return;
+        }
+
+        if (isConfigFileSpecified)
+        {
+            try
+            {
+                var config = LoadConfig(configFilePath);
+                ProcessFolders(rootFolderPath, keepFileCount, config);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to load configuration file: {ex.Message}");
+                return;
+            }
         }
         else
         {
-            ProcessAndDeleteFiles(configFilePath, logFilePath);
+            
+            ProcessFolders(rootFolderPath, keepFileCount);
         }
     }
 
-    static void CreateConfigFile(string rootFolderPath, string configFilePath)
+    static MainConfig LoadConfig(string configFilePath)
     {
-        var folderInfos = new List<FolderInfo>();
-        ProcessDirectory(rootFolderPath, folderInfos);
-
-        var json = JsonConvert.SerializeObject(folderInfos, Formatting.Indented);
-        File.WriteAllText(configFilePath, json);
-    }
-
-    static void ProcessDirectory(string currentFolder, List<FolderInfo> folderInfos)
-    {
-        var bakFiles = new DirectoryInfo(currentFolder).GetFiles("*.bak").OrderBy(f => f.LastWriteTime).ToList();
-        folderInfos.Add(new FolderInfo
+        if (string.IsNullOrEmpty(configFilePath))
         {
-            FolderPath = currentFolder,
-            BakFileCount = bakFiles.Count,
-            KeepFileCount = 0 
-        });
-
-        foreach (var dir in Directory.GetDirectories(currentFolder))
-        {
-            ProcessDirectory(dir, folderInfos);
+            LogMessage("log.txt", "Config file path is not specified.");
+            throw new ArgumentException("Config file path is not specified.");
         }
-    }
 
-    static void ProcessAndDeleteFiles(string configFilePath, string logFilePath)
-    {
-        var folderInfos = JsonConvert.DeserializeObject<List<FolderInfo>>(File.ReadAllText(configFilePath));
-
-        foreach (var folderInfo in folderInfos)
+        if (!File.Exists(configFilePath))
         {
-            if (folderInfo.KeepFileCount <= 0) continue;
-
-            var bakFiles = new DirectoryInfo(folderInfo.FolderPath).GetFiles("*.bak").OrderBy(f => f.LastWriteTime).ToList();
-
-            foreach (var file in bakFiles.Skip(folderInfo.KeepFileCount))
-            {
-                var backupFolderPath = Path.Combine(folderInfo.FolderPath, "Backup");
-                Directory.CreateDirectory(backupFolderPath);
-                var backupFilePath = Path.Combine(backupFolderPath, file.Name);
-                file.CopyTo(backupFilePath);
-                file.Delete();
-                LogDeletedFile(file.FullName, logFilePath);
-            }
+            LogMessage("log.txt", "Config file does not exist.");
+            throw new FileNotFoundException("Config file does not exist.", configFilePath);
         }
-    }
 
-    static void LogDeletedFile(string filePath, string logFilePath)
-    {
         try
         {
-            File.AppendAllText(logFilePath, $"{DateTime.Now}: Deleted {filePath}\n");
+            string configContent = File.ReadAllText(configFilePath);
+            return JsonConvert.DeserializeObject<MainConfig>(configContent);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to log deleted file: {ex.Message}");
+            LogMessage("log.txt", $"Error loading config file: {ex.Message}");
+            throw;
+        }
+    }
+
+    static void ProcessFolders(string rootFolderPath, int keepFileCount, MainConfig config = null)
+    {
+        var folders = Directory.GetDirectories(rootFolderPath, "*", SearchOption.AllDirectories);
+        foreach (var folder in folders)
+        {
+            int currentKeepFileCount = keepFileCount;
+            if (config != null)
+            {
+                var folderConfig = config.FolderList.FirstOrDefault(f => f.FolderName.Equals(Path.GetFileName(folder), StringComparison.OrdinalIgnoreCase));
+                if (folderConfig != null)
+                {
+                    currentKeepFileCount = folderConfig.KeepFileCount;
+                }
+            }
+            DeleteFilesInFolder(folder, currentKeepFileCount);
+        }
+    }
+
+    static void DeleteFilesInFolder(string folder, int keepFileCount)
+    {
+        var files = Directory.GetFiles(folder).Select(f => new FileInfo(f)).OrderByDescending(f => f.LastWriteTime).ToList();
+        for (int i = keepFileCount; i < files.Count; i++)
+        {
+            files[i].Delete();
         }
     }
 
     static void LogMessage(string logFilePath, string message)
     {
-        try
-        {
-            File.AppendAllText(logFilePath, $"{DateTime.Now}: {message}\n");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to log message: {ex.Message}");
-        }
+        File.AppendAllText(logFilePath, $"{DateTime.Now}: {message}{Environment.NewLine}");
     }
 }
 
-public class FolderInfo
-{
-    public string FolderPath { get; set; }
-    public int BakFileCount { get; set; }
-    public int KeepFileCount { get; set; }
-}
 
 

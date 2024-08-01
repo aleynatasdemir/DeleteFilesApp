@@ -1,0 +1,21 @@
+{
+    "RootPath": "/example/path",
+    "FolderList": [
+        {
+            "FolderName": "Folder1",
+            "KeepFileCount": 1
+        },
+        {
+            "FolderName": "Folder2",
+            "KeepFileCount": 1
+        },
+        {
+            "FolderName": "Folder3",
+            "KeepFileCount": 1
+        },
+        {
+            "FolderName": "Folder4",
+            "KeepFileCount": 1
+        }
+    ]
+}
