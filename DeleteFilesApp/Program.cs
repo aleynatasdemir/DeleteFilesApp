@@ -175,7 +175,10 @@ class Program
 
     static void DeleteFilesInFolder(string folder, int keepFileCount, string backupFolderPath)
     {
-        var files = Directory.GetFiles(folder).Select(f => new FileInfo(f)).OrderByDescending(f => f.LastWriteTime).ToList();
+        var files = Directory.GetFiles(folder, "*.bak")
+                         .Select(f => new FileInfo(f))
+                         .OrderByDescending(f => f.LastWriteTime)
+                         .ToList();
         for (int i = keepFileCount; i < files.Count; i++)
         {
             try
