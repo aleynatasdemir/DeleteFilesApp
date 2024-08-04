@@ -3,19 +3,19 @@
     "FolderList": [
         {
             "FolderName": "Folder1",
-            "KeepFileCount": 1
+            "KeepFileCount": 7
         },
         {
             "FolderName": "Folder2",
-            "KeepFileCount": 1
+            "KeepFileCount": 5
         },
         {
             "FolderName": "Folder3",
-            "KeepFileCount": 1
+            "KeepFileCount": 4
         },
         {
             "FolderName": "Folder4",
-            "KeepFileCount": 1
+            "KeepFileCount": 4
         }
     ]
 }

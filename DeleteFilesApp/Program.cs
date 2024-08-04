@@ -21,9 +21,11 @@ class Program
     static void Main(string[] args)
     {
         string rootFolderPath = null;
+        string backupFolderPath = null;
         int keepFileCount = 0;
         bool isConfigFileSpecified = false;
         string configFilePath = null;
+        bool createConfig = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -48,30 +50,53 @@ class Program
                         isConfigFileSpecified = true;
                     }
                     break;
+                case "-b":
+                    if (i + 1 < args.Length)
+                    {
+                        backupFolderPath = args[++i];
+                    }
+                    break;
+                case "-createconfig":
+                    createConfig = true;
+                    break;
                 default:
                     break;
             }
         }
 
-        
-        if (string.IsNullOrEmpty(rootFolderPath))
+
+        if (string.IsNullOrEmpty(rootFolderPath) || string.IsNullOrEmpty(backupFolderPath))
         {
-            LogMessage("log.txt", "Root folder path is not specified.");
-            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount [-cf configFilePath]");
+            LogMessage("log.txt", "Root folder path or backup folder path is not specified.");
+            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount -b \"backupFolderPath\" [-cf configFilePath]");
             return;
         }
 
         if (keepFileCount <= 0)
         {
             LogMessage("log.txt", "Keep file count must be greater than 0.");
-            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount [-cf configFilePath]");
+            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount -b \"backupFolderPath\" [-cf configFilePath]");
+
+            return;
+        }
+
+        if (createConfig)
+        {
+            if (string.IsNullOrEmpty(rootFolderPath) || keepFileCount <= 0)
+            {
+                Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount -createconfig");
+                return;
+            }
+
+            GenerateConfigFile(rootFolderPath, keepFileCount);
+            Console.WriteLine("Config file created successfully.");
             return;
         }
 
         if (!Directory.Exists(rootFolderPath))
         {
             LogMessage("log.txt", "Directory does not exist.");
-            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount [-cf configFilePath]");
+            Console.WriteLine("Usage: deletefiles.exe -p \"rootFolderPath\" -c keepFileCount -b \"backupFolderPath\" [-cf configFilePath]");
             return;
         }
 
@@ -86,7 +111,7 @@ class Program
             try
             {
                 var config = LoadConfig(configFilePath);
-                ProcessFolders(rootFolderPath, keepFileCount, config);
+                ProcessFolders(rootFolderPath, keepFileCount,backupFolderPath,config);
             }
             catch (Exception ex)
             {
@@ -97,7 +122,7 @@ class Program
         else
         {
             
-            ProcessFolders(rootFolderPath, keepFileCount);
+            ProcessFolders(rootFolderPath, keepFileCount,backupFolderPath);
         }
     }
 
@@ -127,31 +152,71 @@ class Program
         }
     }
 
-    static void ProcessFolders(string rootFolderPath, int keepFileCount, MainConfig config = null)
+    static void ProcessFolders(string rootFolderPath, int keepFileCount, string backupFolderPath, MainConfig config = null)
     {
         var folders = Directory.GetDirectories(rootFolderPath, "*", SearchOption.AllDirectories);
         foreach (var folder in folders)
         {
             int currentKeepFileCount = keepFileCount;
+
             if (config != null)
             {
-                var folderConfig = config.FolderList.FirstOrDefault(f => f.FolderName.Equals(Path.GetFileName(folder), StringComparison.OrdinalIgnoreCase));
+                var folderConfig = config.FolderList.FirstOrDefault(f => f.FolderName.Equals(folder, StringComparison.OrdinalIgnoreCase));
                 if (folderConfig != null)
                 {
                     currentKeepFileCount = folderConfig.KeepFileCount;
                 }
             }
-            DeleteFilesInFolder(folder, currentKeepFileCount);
+
+            DeleteFilesInFolder(folder, currentKeepFileCount, backupFolderPath);
         }
     }
 
-    static void DeleteFilesInFolder(string folder, int keepFileCount)
+
+    static void DeleteFilesInFolder(string folder, int keepFileCount, string backupFolderPath)
     {
         var files = Directory.GetFiles(folder).Select(f => new FileInfo(f)).OrderByDescending(f => f.LastWriteTime).ToList();
         for (int i = keepFileCount; i < files.Count; i++)
         {
-            files[i].Delete();
+            try
+            {
+                string destinationPath = Path.Combine(backupFolderPath, files[i].Name);
+                File.Copy(files[i].FullName, destinationPath, true);
+                files[i].Delete();
+                LogMessage("log.txt", $"File copied and deleted: {files[i].FullName} -> {destinationPath}");
+            }
+            catch (Exception ex)
+            {
+                LogMessage("log.txt", $"Failed to delete file: {files[i].FullName}. Error: {ex.Message}");
+            }
         }
+    }
+
+    static void GenerateConfigFile(string rootFolderPath, int keepFileCount)
+    {
+        var config = new MainConfig
+        {
+            RootPath = rootFolderPath,
+            FolderList = new List<FolderInfo>()
+        };
+
+        var folders = Directory.GetDirectories(rootFolderPath, "*", SearchOption.AllDirectories);
+        foreach (var folder in folders)
+        {
+            var bakFiles = Directory.GetFiles(folder, "*.bak");
+            if (bakFiles.Length > 0)
+            {
+                config.FolderList.Add(new FolderInfo
+                {
+                    FolderName = folder,
+                    KeepFileCount = keepFileCount
+                });
+            }
+        }
+
+        string configFilePath = Path.Combine(rootFolderPath, "config.json");
+        File.WriteAllText(configFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
+        LogMessage("log.txt", $"Config file created at: {configFilePath}");
     }
 
     static void LogMessage(string logFilePath, string message)
