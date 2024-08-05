@@ -2,7 +2,7 @@
   "profiles": {
     "DeleteFilesApp": {
       "commandName": "Project",
-      "commandLineArgs": "-p \"C:\\Users\\90552\\OneDrive\\Masaüstü\\Folder\" -c 3 -b \"C:\\Users\\90552\\OneDrive\\Masaüstü\\backup\" -cf \"C:\\Users\\90552\\OneDrive\\Masaüstü\\Folder\\config.json\"\r\n\r\n\r\n \r\n\r\n"
+      "commandLineArgs": "-cf\r\n\r\n\r\n\r\n\r\n\r\n\r\n \r\n\r\n\r\n\r\n\r\n \r\n\r\n"
     }
   }
 }
