@@ -6,12 +6,7 @@ using Newtonsoft.Json;
 
 public class MainConfig
 {
-    //public MainConfig()
-    //{
-    //    //FolderList = new List<FolderConfig>();
-    //}
-
-    // TODO Aleyna .....
+     
     public string RootPath { get; set; }
     public int DefaultKeepFileCount { get; set; }
     public string DefaultBackupFolderPath { get; set; }
@@ -29,7 +24,6 @@ public class FolderConfig
     public int KeepFileCount { get; set; }
     public string BackupFolderPath { get; set; }
 
-    ///
     public string GetFullPath(string rootPath)
     {
         return Path.Combine(rootPath, FolderName);
@@ -38,6 +32,8 @@ public class FolderConfig
 
 class Program
 {
+    private static string logFilePath = $"{DateTime.Now:yyyy-MM-dd}_log.txt";
+
     static void Main(string[] args)
     {
         var rootFolderPath = string.Empty;
@@ -49,7 +45,8 @@ class Program
 
         for (int i = 0; i < args.Length; i++)
         {
-            switch (args[i])
+            string arg = args[i].ToLower();
+            switch (arg)
             {
                 case "-p":
                     if (i + 1 < args.Length)
@@ -126,6 +123,7 @@ class Program
         {
             GenerateConfigFile(rootFolderPath, keepFileCount, backupFolderPath);
             Console.WriteLine("Config file created successfully.");
+            return;
         }
 
         config = new MainConfig()

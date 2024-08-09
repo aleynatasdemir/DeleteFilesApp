@@ -17,7 +17,7 @@ namespace DeleteFilesAppFramework
         //    //FolderList = new List<FolderConfig>();
         //}
 
-        // TODO Aleyna .....
+
         public string RootPath { get; set; }
         public int DefaultKeepFileCount { get; set; }
         public string DefaultBackupFolderPath { get; set; }
@@ -45,6 +45,7 @@ namespace DeleteFilesAppFramework
     class Program
     {
         public static bool Test = false;
+        private static string logFilePath = $"{DateTime.Now:yyyy-MM-dd}_log.txt";
 
         static void Main(string[] args)
         {
@@ -57,7 +58,8 @@ namespace DeleteFilesAppFramework
 
             for (int i = 0; i < args.Length; i++)
             {
-                switch (args[i])
+                string arg = args[i].ToLower();
+                switch (arg)
                 {
                     case "-p":
                         if (i + 1 < args.Length)
@@ -137,6 +139,7 @@ namespace DeleteFilesAppFramework
             {
                 GenerateConfigFile(rootFolderPath, keepFileCount, backupFolderPath);
                 Console.WriteLine("Config file created successfully.");
+                return;
             }
 
             config = new MainConfig()
@@ -264,7 +267,7 @@ namespace DeleteFilesAppFramework
                 var bakFiles = Directory.GetFiles(folder, "*.bak");
                 if (bakFiles.Length > 0)
                 {
-                    string newFolderPath = folder.Replace(rootFolderPath, "");
+                    var newFolderPath = folder.Replace(rootFolderPath, "").Remove(0, 1);
                     config.FolderList.Add(new FolderConfig
                     {
                         FolderName = newFolderPath,
