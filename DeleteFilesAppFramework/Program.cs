@@ -12,12 +12,7 @@ namespace DeleteFilesAppFramework
 
     public class MainConfig
     {
-        //public MainConfig()
-        //{
-        //    //FolderList = new List<FolderConfig>();
-        //}
-
-
+        
         public string RootPath { get; set; }
         public int DefaultKeepFileCount { get; set; }
         public string DefaultBackupFolderPath { get; set; }
